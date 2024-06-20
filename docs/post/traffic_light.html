@@ -9,9 +9,13 @@
         let theme = localStorage.getItem("meek_theme") || "light";
         document.documentElement.setAttribute("data-color-mode", theme);
     </script>
-<meta name="description" content="# 基于51单片机设计的交通信号灯。">
+<meta name="description" content="# 基于51单片机设计的交通信号灯
+## 一、设计要求
+    利用单片机的中断、定时器等功能，将定时器、中断的知识应用到交通信号灯控制系统中。">
 <meta property="og:title" content="traffic_light">
-<meta property="og:description" content="# 基于51单片机设计的交通信号灯。">
+<meta property="og:description" content="# 基于51单片机设计的交通信号灯
+## 一、设计要求
+    利用单片机的中断、定时器等功能，将定时器、中断的知识应用到交通信号灯控制系统中。">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://Yan-ziJun.github.io/yanzijun.github.io/post/traffic_light.html">
 <meta property="og:image" content="https://github.githubassets.com/favicons/favicon.svg">
@@ -70,7 +74,82 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
 </div>
 </div>
     <div id="content">
-<div class="markdown-body" id="postBody"><h1>基于51单片机设计的交通信号灯</h1></div>
+<div class="markdown-body" id="postBody"><h1>基于51单片机设计的交通信号灯</h1>
+<h2>一、设计要求</h2>
+<pre class="notranslate"><code class="notranslate">利用单片机的中断、定时器等功能，将定时器、中断的知识应用到交通信号灯控制系统中。要实现的功能是：正常交通信号灯模式为绿灯亮灯时间为30秒，黄灯亮灯时间为5秒，红灯亮灯时间为35秒，十字路口四个方向分别利用数码管显示倒计时数字，南北方向与东西方向交替执行。加入按键控制，按键1（K2）按下一次，实现倒计时加一，可重复执行；按键2（K3）按下一次，实现倒计时减一，可重复执行；按键3（K1）按下一次，实现倒计时设置确定和恢复正常交通信号灯模式；按键4（K4）按下，实现南北方向交通管制模式；按键5（K5）按下，实现东西方向交通管制模式；按键6（K6）按下，实现交警管制交通模式；按键7（K7）按下一次，实现可定时夜间交通模式；按键8（K8）按下一次，实现可定时优先主干道通行模式。按下K7和K8按键各一次，实现夜间至早高峰结束无人托管模式。
+</code></pre>
+<h2>二、设计思路</h2>
+<h3>（一）正常交通信号灯模式</h3>
+<h4>1、倒计时数字显示</h4>
+<pre class="notranslate"><code class="notranslate">在硬件电路方面，数码管采用4个两位七段共阴数码管，段码输入端与单片机输出段码端对应连接，公共端与单片机输出数码管动态显示信号端对应连接。
+</code></pre>
+<p><a target="_blank" rel="noopener noreferrer" href="https://github.com/Yan-ziJun/yanzijun.github.io/assets/162871983/6f81ac05-89a5-4415-a094-d1374efaf51c"><img src="https://github.com/Yan-ziJun/yanzijun.github.io/assets/162871983/6f81ac05-89a5-4415-a094-d1374efaf51c" alt="image" style="max-width: 100%;"></a></p>
+<pre class="notranslate"><code class="notranslate"> 在程序设计方面，定义一个全局变量 djs 作为倒计时数，将变量除以 10 得到数码管十位数字，变量取 10 的余得到数码管的个位数字，数码管的具体实现，采用数组存放0-9共阴极数字段码，我采取 number[] = {0-9的段码}; 刚好 number[数字] = 数字的段码；两个数字的依次显示（延时1ms）,数码管动态显示得以实现数码管倒计时数字的显示。
+</code></pre>
+<pre class="notranslate"><code class="notranslate">int number[] = {0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x6f};
+void smg_display()		 
+{	
+	int b1,b2;        
+ 	b1 = djs/10;        
+	b2 = djs%10;     
+	
+	P0 = number[b1];    
+        smg1 = 0;
+        delay1ms();       
+        smg1 = 1;
+
+	P0 = number[b2];     
+	smg2 = 0;
+	delay1ms();       
+	smg2 = 1;
+}
+</code></pre>
+<h4>2、红绿灯显示</h4>
+<pre class="notranslate"><code class="notranslate">在硬件电路方面，使用发光颜色为绿色、黄色、红色的LED作为红绿灯显示载体。担心单片机输出电流不能使 LED 发挥出最好的效果，所以采用 LED 低电平点亮。
+</code></pre>
+<p><a target="_blank" rel="noopener noreferrer" href="https://github.com/Yan-ziJun/yanzijun.github.io/assets/162871983/213ece07-cfdc-49b0-966b-4c99c46bf998"><img src="https://github.com/Yan-ziJun/yanzijun.github.io/assets/162871983/213ece07-cfdc-49b0-966b-4c99c46bf998" alt="image" style="max-width: 100%;"></a></p>
+<pre class="notranslate"><code class="notranslate">在程序设计方面，定义两个方向的红绿黄灯函数 EW_display()、SN_display() 通过一个标志位 led_flag 来改变红绿灯方向的来回切换。变换时间通过定时器的定时功能实现，设置定时器T1为1ms溢出一次，让变量 timer_1s 每 1ms 增加一次，增加 1000 次刚好为 1s ,作为倒计时秒计时，当 timer_1s 等于 1000 时，djs 减一，实现倒计时功能。让变量 timer_500ms 每 1ms 增加一次，增加 500 次刚好为 0.5s ,作为黄灯闪烁的时间，当 timer_500ms 等于 500 时，标志位 star_flag 取反，实现对黄灯的点亮和熄灭，实现黄灯的闪烁效果，每 0.5s 闪烁一次。（在定时器T1中断服务函数中实现）
+</code></pre>
+<pre class="notranslate"><code class="notranslate">int timer_1s    = 0;         //用于定时器计数变量
+int djs         =35;		 //倒计时，不区分主次干道，一视同仁
+bit led_flag    = 0;         //决定哪路先通行 0 南北  1 东西 详见main函数
+int timer_500ms = 0;		 //用于定时器计数变量
+bit star_flag   = 0;		 //黄灯闪烁效果，此位用来高低电平变换来实现黄灯闪烁的效果
+
+void Timer1Init(void)		//1毫秒@12.000MHz
+{
+	TMOD = 0x10;
+        TL1 = 0x18;		//设置定时初值
+	TH1 = 0xFC;		//设置定时初值 
+	TF1 = 0;		//清除TF1标志
+	TR1 = 1;		//定时器1开始计时
+	ET1 = 1;        //开定时器1中断
+	EA = 1;         //开总中断
+}
+void timer1() interrupt 3 	
+{
+	TF1=0;
+	TL1 = 0x18;		
+	TH1 = 0xFC;		         
+	timer_1s++;    
+	timer_500ms++;
+	if(timer_1s==1000)  
+	{ 
+		timer_1s=0;       
+		djs--;                
+		if(djs&lt;0)
+		{
+			djs=35;             
+			led_flag=~led_flag;        
+		}
+	}
+	if(timer_500ms==500)  
+	{
+		timer_500ms=0;        
+		star_flag=~star_flag;         
+	}
+}
+</code></pre></div>
 <div style="font-size:small;margin-top:8px;float:right;"></div>
 <button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
 <div class="comments" id="comments"></div>
